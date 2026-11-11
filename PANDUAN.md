@@ -20,9 +20,8 @@ Tidak perlu login atau server. Semua pengaturan tersimpan di HP masing-masing.
    iPhone: setelah memotret tekan **Bagikan → Simpan Gambar**.
 6. Supaya terasa seperti aplikasi: menu Chrome ⋮ → **Tambahkan ke layar utama** / **Instal aplikasi**.
 
-## Letak keterangan (⚙️ Pengaturan)
-- **Bingkai di bawah foto** (bawaan): foto tetap utuh, keterangan ada di panel hijau tua di bawahnya. Wajah dan aktivitas tidak tertutup. Saat membidik, layar kamera tetap bersih.
-- **Di atas foto**: model Timemark. Ukuran teks bisa diatur Kecil / Sedang / Besar.
+## Ukuran keterangan (⚙️ Pengaturan)
+Keterangan menempel di bagian bawah foto dengan latar gelap transparan. Ukuran teks: **Kecil** (bawaan, disarankan), Sedang, atau Besar.
 
 ## Blitz (tombol ⚡ di kanan atas)
 Ketuk berulang untuk berganti mode:

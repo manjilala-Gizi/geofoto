@@ -87,7 +87,6 @@
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
     <div class="status" id="status">📍 Mencari lokasi GPS…</div>
-    <div class="infoBingkai hide" id="infoBingkai">🖼️ Keterangan ditambahkan di bingkai bawah foto — wajah tidak tertutup</div>
     <div class="izin hide" id="izin">
       <div style="font-size:44px">📷</div>
       <div id="izinTeks">Izinkan akses <b>kamera</b> dan <b>lokasi</b> agar GeoFoto bisa bekerja.</div>
@@ -135,14 +134,9 @@
       <button id="btnHapusLogo" class="hide">Hapus</button>
       <input type="file" id="fileLogo" accept="image/*" class="hide">
     </div>
-    <label>Letak keterangan</label>
-    <div class="pil" id="pilPosisi">
-      <button data-v="bingkai">🖼️ Bingkai di bawah foto</button>
-      <button data-v="atas">📷 Di atas foto</button>
-    </div>
     <label>Ukuran teks keterangan</label>
     <div class="pil" id="pilUkuran">
-      <button data-v="kecil">Kecil</button><button data-v="sedang">Sedang</button><button data-v="besar">Besar</button>
+      <button data-v="kecil">Kecil (disarankan)</button><button data-v="sedang">Sedang</button><button data-v="besar">Besar</button>
     </div>
     <label>Tampilkan di foto</label>
     <label class="cek"><input type="checkbox" id="cAlamat" checked> Alamat (butuh internet)</label>
@@ -186,9 +180,9 @@ function muatSetel(){
   let s = {};
   try{ s = JSON.parse(localStorage.getItem('geofoto') || '{}'); }catch(e){}
   return Object.assign({ nama:'', instansi:'', logo:'', kegiatan:'', tempat:'', catatan:'',
-    alamat:true, koord:true, kode:true, auto:true, posisi:'bingkai', ukuran:'sedang', daftar:DAFTAR_AWAL }, s);
+    alamat:true, koord:true, kode:true, auto:true, posisi:'atas', ukuran:'kecil', daftar:DAFTAR_AWAL }, s);
 }
-let S = muatSetel();
+let S = muatSetel(); S.posisi = 'atas';
 function simpanS(){ try{ localStorage.setItem('geofoto', JSON.stringify(S)); }catch(e){ toast('Pengaturan tidak dapat disimpan di browser ini'); } }
 
 /* ---------- state ---------- */
@@ -220,8 +214,9 @@ async function mulaiKamera(){
   if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
   const v = $('video'); v.srcObject = null; $('btnJepret').disabled = true;
   try{
+    senterOK = null;
     stream = await bukaStream();
-    v.onloadedmetadata = () => { v.play().catch(()=>{}); aturOverlay(); siap(); };
+    v.onloadedmetadata = () => { v.play().catch(()=>{}); aturOverlay(); siap(); setTimeout(aturTombolFlash, 600); };
     v.srcObject = stream;
     const st = stream.getVideoTracks()[0].getSettings ? stream.getVideoTracks()[0].getSettings() : {};
     const depan = st.facingMode ? st.facingMode === 'user' : hadap === 'user';
@@ -242,35 +237,64 @@ async function mulaiKamera(){
 const FLASH = { mati:['⚡','Blitz mati'], jepret:['⚡A','Blitz saat memotret'], nyala:['🔦','Blitz selalu menyala'] };
 let modeFlash = 'mati';
 function trek(){ return stream && stream.getVideoTracks()[0]; }
-function bisaSenter(){ const t = trek(); try{ return !!(t && t.getCapabilities && t.getCapabilities().torch); }catch(e){ return false; } }
-async function senter(on){ const t = trek(); if (!t || !bisaSenter()) return; try{ await t.applyConstraints({ advanced:[{ torch:on }] }); }catch(e){} }
+let senterOK = null;   // null = belum dicek
+function bisaSenterCap(t){ try{ return !!t.getCapabilities().torch; }catch(e){ return false; } }
+async function senter(on){
+  const t = trek(); if (!t) return false;
+  try{
+    await t.applyConstraints({ advanced:[{ torch:on }] });
+    const ok = !on || (t.getSettings && t.getSettings().torch === true) || bisaSenterCap(t);
+    if (on) senterOK = ok;
+    return ok;
+  }catch(e){ if (on) senterOK = false; return false; }
+}
+/** Blitz asli lewat ImageCapture (cadangan bila senter tidak bisa) */
+async function fotoBlitzAsli(){
+  try{
+    if (!('ImageCapture' in window)) return null;
+    const ic = new ImageCapture(trek());
+    const cap = await ic.getPhotoCapabilities();
+    if (!cap.fillLightMode || !cap.fillLightMode.includes('flash')) return null;
+    const blob = await ic.takePhoto({ fillLightMode:'flash' });
+    return await createImageBitmap(blob);
+  }catch(e){ return null; }
+}
 function kameraDepan(){ return $('video').classList.contains('cermin'); }
 function aturTombolFlash(){
   const b = $('btnFlash');
+  if (modeFlash === 'nyala' && kameraDepan()) modeFlash = 'jepret';
   b.textContent = FLASH[modeFlash][0];
   b.classList.toggle('aktif', modeFlash !== 'mati');
-  // kamera belakang tanpa senter -> mode 'nyala' tidak tersedia
-  if (modeFlash === 'nyala' && (kameraDepan() || !bisaSenter())) modeFlash = 'jepret', b.textContent = FLASH.jepret[0];
-  senter(modeFlash === 'nyala' && !kameraDepan());
+  if (!kameraDepan()) senter(modeFlash === 'nyala');
 }
-$('btnFlash').onclick = () => {
-  const urut = (kameraDepan() || !bisaSenter()) ? ['mati','jepret'] : ['mati','jepret','nyala'];
+$('btnFlash').onclick = async () => {
+  const urut = (kameraDepan() || senterOK === false) ? ['mati','jepret'] : ['mati','jepret','nyala'];
   modeFlash = urut[(urut.indexOf(modeFlash) + 1) % urut.length];
   aturTombolFlash();
-  toast(FLASH[modeFlash][1] + (modeFlash !== 'mati' && (kameraDepan() || !bisaSenter()) ? ' (layar putih)' : ''));
+  let pesan = FLASH[modeFlash][1];
+  if (modeFlash !== 'mati'){
+    if (kameraDepan()) pesan += ' (layar putih)';
+    else if (modeFlash === 'nyala' && !(await senter(true))){
+      modeFlash = 'jepret'; aturTombolFlash();
+      pesan = 'Lampu senter tidak bisa diakses browser di HP ini — blitz dipakai saat memotret saja';
+    }
+  }
+  toast(pesan, 3200);
 };
 const tunggu = ms => new Promise(r => setTimeout(r, ms));
+// mengembalikan { matikan, gambar } ; gambar = hasil blitz asli bila dipakai
 async function nyalakanFlash(){
-  if (modeFlash === 'mati') return null;
-  if (!kameraDepan() && bisaSenter()){
-    if (modeFlash === 'jepret'){ await senter(true); await tunggu(700); return () => senter(false); }
-    return null;                                   // mode 'nyala': sudah menyala
+  if (modeFlash === 'mati') return {};
+  if (!kameraDepan()){
+    if (modeFlash === 'nyala') return {};                     // senter sudah menyala
+    if (await senter(true)){ await tunggu(800); return { matikan: () => senter(false) }; }
+    const g = await fotoBlitzAsli();                          // cadangan: blitz asli kamera
+    if (g) return { gambar: g };
   }
-  // kamera depan / HP tanpa senter: layar putih terang sebagai lampu
+  // kamera depan / HP tanpa akses lampu: layar putih terang
   const f = $('layarPutih'); f.classList.add('on'); await tunggu(450);
-  return () => f.classList.remove('on');
+  return { matikan: () => f.classList.remove('on') };
 }
-
 function siap(){ $('btnJepret').disabled = !($('video').videoWidth); }
 
 /* ---------- GPS & alamat ---------- */
@@ -337,7 +361,7 @@ function zonaWaktu(){
   const o = -new Date().getTimezoneOffset()/60;
   return o === 7 ? 'WIB' : o === 8 ? 'WITA' : o === 9 ? 'WIT' : 'GMT' + (o>=0?'+':'') + o;
 }
-const SKALA = { kecil:.75, sedang:1, besar:1.2 };
+const SKALA = { kecil:.55, sedang:.7, besar:.9 };
 const fontCap = (s,b) => `${b?'700':'500'} ${s}px system-ui,-apple-system,Roboto,sans-serif`;
 /** Menyusun baris keterangan & menghitung tingginya */
 function susunCap(ctx, W, u, d, kode){
@@ -425,8 +449,6 @@ function aturOverlay(){
 function gambarOverlay(){
   const c = $('overlay'); if (!c.width) return;
   const x = c.getContext('2d'); x.clearRect(0,0,c.width,c.height);
-  $('infoBingkai').classList.toggle('hide', S.posisi !== 'bingkai');
-  if (S.posisi === 'bingkai') return;   // foto tetap bersih saat membidik
   gambarCap(x, c.width, c.height, dataCap(new Date()), S.kode ? '••••••' : '');
 }
 setInterval(gambarOverlay, 1000);
@@ -490,14 +512,15 @@ function sisipExif(jpg, t, c){
 async function jepret(){
   const v = $('video'); if (!v.videoWidth) return;
   $('btnJepret').disabled = true;
-  const matikan = await nyalakanFlash();
-  try{ await ambilFoto(v, matikan); } finally { $('btnJepret').disabled = false; }
+  const fl = await nyalakanFlash();
+  try{ await ambilFoto(v, fl); } finally { $('btnJepret').disabled = false; }
 }
-async function ambilFoto(v, matikan){
-  const W = v.videoWidth, H = v.videoHeight;
+async function ambilFoto(v, fl){
+  const g = fl.gambar;
+  const W = g ? g.width : v.videoWidth, H = g ? g.height : v.videoHeight;
   const sumber = document.createElement('canvas'); sumber.width = W; sumber.height = H;
-  sumber.getContext('2d').drawImage(v, 0, 0, W, H);       // ambil gambar secepatnya
-  if (matikan) matikan();
+  sumber.getContext('2d').drawImage(g || v, 0, 0, W, H);  // ambil gambar secepatnya
+  if (fl.matikan) fl.matikan();
   $('flash').style.opacity = .8; setTimeout(() => $('flash').style.opacity = 0, 120);
   const t = new Date(), d = dataCap(t), kode = S.kode ? await buatKode(t, d) : '';
   let c;
@@ -566,11 +589,11 @@ $('chipKegiatan').onclick = bukaKegiatan;
 function bukaSetel(){
   $('inNama').value = S.nama; $('inInstansi').value = S.instansi; $('inDaftar').value = S.daftar;
   $('cAlamat').checked = S.alamat; $('cKoord').checked = S.koord; $('cKode').checked = S.kode; $('cAuto').checked = S.auto;
-  tandai('pilPosisi', S.posisi); tandai('pilUkuran', S.ukuran);
+  tandai('pilUkuran', S.ukuran);
   tampilLogo(); $('panelSetel').classList.add('on');
 }
 function tandai(id, v){ [...$(id).children].forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
-['pilPosisi','pilUkuran'].forEach(id => $(id).onclick = e => { if (e.target.dataset.v) tandai(id, e.target.dataset.v); });
+['pilUkuran'].forEach(id => $(id).onclick = e => { if (e.target.dataset.v) tandai(id, e.target.dataset.v); });
 function tampilLogo(){
   $('logoPrev').classList.toggle('hide', !S.logo); $('btnHapusLogo').classList.toggle('hide', !S.logo);
   if (S.logo) $('logoPrev').src = S.logo;
@@ -591,8 +614,7 @@ $('fileLogo').onchange = e => {
 $('simpanSetel').onclick = () => {
   S.nama = $('inNama').value.trim(); S.instansi = $('inInstansi').value.trim();
   S.daftar = $('inDaftar').value.trim() || DAFTAR_AWAL;
-  S.posisi = $('pilPosisi').querySelector('.on')?.dataset.v || 'bingkai';
-  S.ukuran = $('pilUkuran').querySelector('.on')?.dataset.v || 'sedang';
+  S.ukuran = $('pilUkuran').querySelector('.on')?.dataset.v || 'kecil';
   S.alamat = $('cAlamat').checked; S.koord = $('cKoord').checked; S.kode = $('cKode').checked; S.auto = $('cAuto').checked;
   simpanS(); muatLogo(); setTimeout(gambarOverlay, 100); cariAlamat();
   $('panelSetel').classList.remove('on'); toast('Pengaturan disimpan');
