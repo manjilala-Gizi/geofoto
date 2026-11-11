@@ -20,6 +20,19 @@ Tidak perlu login atau server. Semua pengaturan tersimpan di HP masing-masing.
    iPhone: setelah memotret tekan **Bagikan → Simpan Gambar**.
 6. Supaya terasa seperti aplikasi: menu Chrome ⋮ → **Tambahkan ke layar utama** / **Instal aplikasi**.
 
+## Letak keterangan (⚙️ Pengaturan)
+- **Bingkai di bawah foto** (bawaan): foto tetap utuh, keterangan ada di panel hijau tua di bawahnya. Wajah dan aktivitas tidak tertutup. Saat membidik, layar kamera tetap bersih.
+- **Di atas foto**: model Timemark. Ukuran teks bisa diatur Kecil / Sedang / Besar.
+
+## Blitz (tombol ⚡ di kanan atas)
+Ketuk berulang untuk berganti mode:
+- **⚡** mati
+- **⚡A** menyala saat memotret
+- **🔦** selalu menyala, khusus kamera belakang (berguna untuk memotret di ruangan gelap)
+
+Kamera depan memakai **layar putih terang** sebagai lampu. Di iPhone, browser tidak mengizinkan akses lampu
+kamera, jadi yang dipakai juga layar putih.
+
 ## Catatan
 - Tanpa sinyal internet: kamera, jam, dan koordinat tetap jalan. Alamat tidak muncul
   (butuh internet), jadi yang tercetak hanya koordinat.
